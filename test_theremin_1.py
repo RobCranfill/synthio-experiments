@@ -5,7 +5,7 @@
 
 import board
 import audiocore, audiobusio, audiomixer, synthio
-import time
+import time, math
 
 import ulab.numpy as np
 
@@ -27,6 +27,7 @@ BUFFER_SIZE = 2*1024
 SAMPLE_SIZE   =  1024
 SAMPLE_VOLUME = 32767
 wave_sine = np.array(np.sin(np.linspace(0, 2*np.pi, SAMPLE_SIZE, endpoint=False)) * SAMPLE_VOLUME, dtype=np.int16)
+ramp_up = np.linspace(-SAMPLE_VOLUME, SAMPLE_VOLUME, SAMPLE_SIZE, endpoint=False, dtype=np.int16)
 
 
 audio = audiobusio.I2SOut(PIN_BIT_CLOCK, PIN_WORD_SELECT, PIN_DATA)
@@ -41,18 +42,65 @@ _mixer.voice[0].level = 0.1 # just in case
 _mixer.voice[0].play(_synth)
 
 
-def makeSine3(synth):
+def calculatePortamentoScale(baseFreq, targetFreq):
+    s = math.log(targetFreq/baseFreq, 2)
+    print(f"calculatePortamentoScale({baseFreq}, {targetFreq}): = {s}")
+    return s
 
-    pitchBend = synthio.LFO(rate=0.5, scale=1.0)  # rate 0.5 Hz so the lfo cycles at 2 per second
+def goToNote(note: synthio.Note, lfo: synthio.LFO, startfreq, targetFreq, nSeconds):
+    """ create the proper LFO to take us from current to target freq, and trigger it. """
 
-    synth_note = synthio.Note(200, waveform=wave_sine, bend=pitchBend)
+    lfo.scale = calculatePortamentoScale(startfreq, targetFreq)
+    lfo.rate = 1/nSeconds
+    print(f"retrigger: lfo.scale {lfo.scale}, lfo.rate {lfo.rate}")
+
+    note.frequency = startfreq
+    lfo.retrigger()
+
+
+def makeSine5(synth):
+
+    lfo = synthio.LFO(waveform=ramp_up, rate=1, scale=0, once=True) # what initial rate?
+    synth_note = synthio.Note(2000, waveform=wave_sine, bend=lfo)
     synth.press(synth_note)
 
     while True:
-        print("cycling....")
-        time.sleep(6.66)
-        pitchBend.retrigger()
+        goToNote(synth_note, lfo, 2000, 4000, 1)
+        time.sleep(5)
 
+        goToNote(synth_note, lfo, 3000, 8000, 2)
+        time.sleep(5)
+
+
+def makeSine4(synth):
+
+    s = calculatePortamentoScale(2000, 4000)
+
+    portamento = synthio.LFO(waveform=ramp_up, rate=1, scale=s, once=True)  # 1 second to attain target freq
+    synth_note = synthio.Note(2000, waveform=wave_sine, bend=portamento)
+    synth.press(synth_note)
+    while True:
+        portamento.rate += 0.25
+        print(f"cycling; portamento rate {portamento.rate}")
+        time.sleep(6.123)
+        portamento.retrigger()
+
+
+def makeSine3(synth):
+
+    octaves = 4
+
+    # 'scale' for a bend LFO is 1.0 = 1 octave, one doubling
+    # start with a rate 0.25 Hz so the lfo cycles at once in 4 seconds
+    portamento = synthio.LFO(waveform=ramp_up, rate=0.25, scale=octaves, once=True)
+
+    synth_note = synthio.Note(200, waveform=wave_sine, bend=portamento)
+    synth.press(synth_note)
+    while True:
+        portamento.rate += 0.25
+        print(f"cycling; portamento rate {portamento.rate}")
+        time.sleep(6.123)
+        portamento.retrigger()
 
 
 def makeSine2(synth):
@@ -141,7 +189,9 @@ def beep(synth):
     time.sleep(0.5)
 
 
-makeSine3(_synth)
+makeSine5(_synth)
+# makeSine4(_synth)
+# makeSine3(_synth)
 # makeSine2(_synth)
 # makeSine1(_synth)
 # makeWaves(_synth)
