@@ -21,30 +21,76 @@ PIN_BIT_CLOCK = board.GP16
 PIN_WORD_SELECT = board.GP17
 PIN_DATA = board.GP18
 
-SAMPLE_RATE = 22050 # good enuf?
-BUFFER_SIZE = 2*1024
+SYNTH_SAMPLE_RATE = 22050 # good enuf?
+MIXER_BUFFER_SIZE = 2*1024
 
-SAMPLE_SIZE   =  1024
-SAMPLE_VOLUME = 32767
-wave_sine = np.array(np.sin(np.linspace(0, 2*np.pi, SAMPLE_SIZE, endpoint=False)) * SAMPLE_VOLUME, dtype=np.int16)
-ramp_up = np.linspace(-SAMPLE_VOLUME, SAMPLE_VOLUME, SAMPLE_SIZE, endpoint=False, dtype=np.int16)
+WAVE_SAMPLE_SIZE   =  1024
+WAVE_SAMPLE_VOLUME = 32767
+
+wave_sine = np.array(
+    np.sin(np.linspace(0, 2*np.pi, WAVE_SAMPLE_SIZE, endpoint=False)) * WAVE_SAMPLE_VOLUME, 
+    dtype=np.int16)
+ramp_up = np.linspace(
+    -WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
 
 
 audio = audiobusio.I2SOut(PIN_BIT_CLOCK, PIN_WORD_SELECT, PIN_DATA)
 
 # As per https://github.com/todbot/circuitpython-synthio-tricks use a mixer:
-_mixer = audiomixer.Mixer(channel_count=2, sample_rate=SAMPLE_RATE, buffer_size=BUFFER_SIZE)
-_synth = synthio.Synthesizer(channel_count=2, sample_rate=SAMPLE_RATE)
+_mixer = audiomixer.Mixer(channel_count=2, sample_rate=SYNTH_SAMPLE_RATE, buffer_size=MIXER_BUFFER_SIZE)
+_synth = synthio.Synthesizer(channel_count=2, sample_rate=SYNTH_SAMPLE_RATE)
 
 # the audio plays the mixer, and the mixer plays the synth. right? whatev.
 audio.play(_mixer)
-_mixer.voice[0].level = 0.1 # just in case
+_mixer.voice[0].level = 0.25 # not too loud
 _mixer.voice[0].play(_synth)
+
+
+def testPortamento2(synth):
+
+    lfo = synthio.LFO(waveform=ramp_up, rate=1, scale=0, once=True) # what initial rate?
+
+    # song_notes = (60, 63, 65, 60, 63, 66, 65) # smoke on the water
+    song_notes = (60, 67, 72) # C G C
+ 
+    f1 = synthio.midi_to_hz(song_notes[0])
+
+    # so we start off with one arbitrary note, and bend it to were we need
+    synth_note = synthio.Note(f1, waveform=wave_sine, bend=lfo)
+    synth.press(synth_note)
+
+    while True:
+        for sn in song_notes:
+            f2 = synthio.midi_to_hz(sn)
+            goToNote(synth_note, lfo, f1, f2, 1.0)
+            f1 = f2
+            time.sleep(4)
+
+
+def testPortamento1(synth):
+
+    lfo = synthio.LFO(waveform=ramp_up, rate=1, scale=0, once=True) # what initial rate?
+
+    start_note = 65
+    song_notes = (start_note+0, start_note+5, start_note-3) # @todbot's melody
+
+    f1 = synthio.midi_to_hz(song_notes[0])
+
+    # so we start off with one arbitrary note, and bend it to were we need?
+    synth_note = synthio.Note(f1, waveform=wave_sine, bend=lfo)
+    synth.press(synth_note)
+
+    while True:
+        for sn in song_notes:
+            f2 = synthio.midi_to_hz(sn)
+            goToNote(synth_note, lfo, f1, f2, 2.0)
+            f1 = f2
+            time.sleep(2.1)
 
 
 def calculatePortamentoScale(baseFreq, targetFreq):
     s = math.log(targetFreq/baseFreq, 2)
-    print(f"calculatePortamentoScale({baseFreq}, {targetFreq}): = {s}")
+    # print(f"calculatePortamentoScale({baseFreq}, {targetFreq}): = {s}")
     return s
 
 def goToNote(note: synthio.Note, lfo: synthio.LFO, startfreq, targetFreq, nSeconds):
@@ -52,7 +98,8 @@ def goToNote(note: synthio.Note, lfo: synthio.LFO, startfreq, targetFreq, nSecon
 
     lfo.scale = calculatePortamentoScale(startfreq, targetFreq)
     lfo.rate = 1/nSeconds
-    print(f"retrigger: lfo.scale {lfo.scale}, lfo.rate {lfo.rate}")
+    print(f"  goToNote: {startfreq:4.0f} -> {targetFreq:4.0f}")
+    print(f"    = lfo.scale {lfo.scale}")
 
     note.frequency = startfreq
     lfo.retrigger()
@@ -189,7 +236,9 @@ def beep(synth):
     time.sleep(0.5)
 
 
-makeSine5(_synth)
+testPortamento2(_synth)
+# testPortamento1(_synth)
+# makeSine5(_synth)
 # makeSine4(_synth)
 # makeSine3(_synth)
 # makeSine2(_synth)
