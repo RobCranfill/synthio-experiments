@@ -19,11 +19,11 @@ print(f"supervisor.runtime.autoreload = {supervisor.runtime.autoreload}")
 
 # my Pico testbed
 #
-PIN_BIT_CLOCK = board.GP16
+PIN_BIT_CLOCK   = board.GP16
 PIN_WORD_SELECT = board.GP17
-PIN_DATA = board.GP18
+PIN_DATA        = board.GP18
 
-SYNTH_SAMPLE_RATE = 22050 # good enuf?
+SYNTH_SAMPLE_RATE = 22050
 MIXER_BUFFER_SIZE = 2*1024
 
 WAVE_SAMPLE_SIZE   =  1024
@@ -32,9 +32,11 @@ WAVE_SAMPLE_VOLUME = 32767
 sine_wave = np.array(
     np.sin(np.linspace(0, 2*np.pi, WAVE_SAMPLE_SIZE, endpoint=False)) * WAVE_SAMPLE_VOLUME, 
     dtype=np.int16)
-ramp_up = np.linspace(
-    -WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
 
+# ramp_up = np.linspace(
+#     -WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
+ramp_up_from_zero = np.linspace(
+    0, WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
 
 audio = audiobusio.I2SOut(PIN_BIT_CLOCK, PIN_WORD_SELECT, PIN_DATA)
 
@@ -63,7 +65,7 @@ def test1(synth):
     # Starting note
     f1 = synthio.midi_to_hz(song_notes[0])
 
-    lfo = synthio.LFO(waveform=ramp_up, once=True, scale=0) # scale=0: hit the initial note only
+    lfo = synthio.LFO(waveform=ramp_up_from_zero, once=True, scale=0) # scale=0: no bend to start with
     n = synthio.Note(f1, waveform=sine_wave, bend=lfo)
     synth.press(n)
 
@@ -73,7 +75,7 @@ def test1(synth):
             f2 = synthio.midi_to_hz(sn)
             slideFromF1toF2(n, f1, f2)
             f1 = f2
-            time.sleep(2)
+            time.sleep(5)
 
 
 def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds=1.0):
@@ -87,11 +89,10 @@ def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds=1.0):
 
     # lfo 'scale' is just the base-2 log of the ratio of the frequencies.
     lfo.scale = math.log(targetFreq/startfreq, 2)
-
     lfo.rate = 1/nSeconds
-    print(f"  goToNote: {startfreq:.0f} -> {targetFreq:.0f} => lfo.scale {lfo.scale:.2f}")
-
     note.frequency = startfreq
+
+    print(f"  goToNote: {startfreq:.0f} -> {targetFreq:.0f} => lfo.scale {lfo.scale:.2f}")
     lfo.retrigger()
 
 
