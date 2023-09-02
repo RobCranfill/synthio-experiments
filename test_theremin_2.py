@@ -63,20 +63,20 @@ def test1(synth):
     # Starting note
     f1 = synthio.midi_to_hz(song_notes[0])
 
-    lfo = synthio.LFO(waveform=ramp_up, once=True) # we will set the bend and scale later
+    lfo = synthio.LFO(waveform=ramp_up, once=True, scale=0) # scale=0: hit the initial note only
     n = synthio.Note(f1, waveform=sine_wave, bend=lfo)
     synth.press(n)
 
     while True:
+        time.sleep(1)
         for sn in song_notes:
             f2 = synthio.midi_to_hz(sn)
-            slideFromF1toF2(n, f1, f2, 1.0)
+            slideFromF1toF2(n, f1, f2)
             f1 = f2
             time.sleep(2)
-        time.sleep(1)
 
 
-def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds):
+def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds=1.0):
     """ Create the proper LFO to take us from current to target freq, and trigger it. 
     
     nSeconds: number of seconds to take to move from start to target (inverse of LFO rate).
@@ -89,8 +89,7 @@ def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds):
     lfo.scale = math.log(targetFreq/startfreq, 2)
 
     lfo.rate = 1/nSeconds
-    print(f"  goToNote: {startfreq:.0f} -> {targetFreq:.0f}")
-    print(f"    => lfo.scale {lfo.scale}")
+    print(f"  goToNote: {startfreq:.0f} -> {targetFreq:.0f} => lfo.scale {lfo.scale:.2f}")
 
     note.frequency = startfreq
     lfo.retrigger()
