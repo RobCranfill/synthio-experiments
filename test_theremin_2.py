@@ -2,6 +2,12 @@
 
 Pure sine wave, for now. 
 TODO: morph wavetable as per @todbot? 
+TODO: instead of simple ramp for frequency LFO, use an S-ramp like
+
+References to read:
+    http://www.thereminworld.com/Forums/T/31291/modelling-the-theremin-wave-in-software
+    https://paia.com/thereton/
+
 """
 
 import audiocore, audiobusio, audiomixer, board, math, synthio, time
@@ -16,9 +22,7 @@ print(f"supervisor.runtime.autoreload = {supervisor.runtime.autoreload}")
 
 
 # ---------------- setup
-
 # my Pico testbed
-#
 PIN_BIT_CLOCK   = board.GP16
 PIN_WORD_SELECT = board.GP17
 PIN_DATA        = board.GP18
@@ -33,10 +37,10 @@ sine_wave = np.array(
     np.sin(np.linspace(0, 2*np.pi, WAVE_SAMPLE_SIZE, endpoint=False)) * WAVE_SAMPLE_VOLUME, 
     dtype=np.int16)
 
-# ramp_up = np.linspace(
-#     -WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
+# FIXME: ramp num could be really low, right? why not?
+RAMP_SAMPLE_SIZE = 100
 ramp_up_from_zero = np.linspace(
-    0, WAVE_SAMPLE_VOLUME, WAVE_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
+    0, WAVE_SAMPLE_VOLUME, num=RAMP_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
 
 audio = audiobusio.I2SOut(PIN_BIT_CLOCK, PIN_WORD_SELECT, PIN_DATA)
 
@@ -70,12 +74,12 @@ def test1(synth):
     synth.press(n)
 
     while True:
-        time.sleep(1)
+        time.sleep(.1)
         for sn in song_notes:
             f2 = synthio.midi_to_hz(sn)
-            slideFromF1toF2(n, f1, f2)
+            slideFromF1toF2(n, f1, f2, nSeconds=0.1)
             f1 = f2
-            time.sleep(5)
+            time.sleep(.5)
 
 
 def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds=1.0):
@@ -89,8 +93,11 @@ def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds=1.0):
 
     # lfo 'scale' is just the base-2 log of the ratio of the frequencies.
     lfo.scale = math.log(targetFreq/startfreq, 2)
-    lfo.rate = 1/nSeconds
+
+    # reset the note's freq to the starting freq
     note.frequency = startfreq
+
+    lfo.rate = 1/nSeconds
 
     print(f"  goToNote: {startfreq:.0f} -> {targetFreq:.0f} => lfo.scale {lfo.scale:.2f}")
     lfo.retrigger()
