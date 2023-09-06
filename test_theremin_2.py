@@ -1,16 +1,22 @@
 """Trying to get a more theremin-y sound.
 
-Pure sine wave, for now. 
+Pure sine wave, for now.
 TODO: morph wavetable as per @todbot? 
-TODO: instead of simple ramp for frequency LFO, use an S-ramp like
+TODO: instead of simple ramp for frequency LFO, use an S-like ramp ("sigmoid"?)
 
-References to read:
+References:
     http://www.thereminworld.com/Forums/T/31291/modelling-the-theremin-wave-in-software
     https://paia.com/thereton/
 
 """
 
-import audiocore, audiobusio, audiomixer, board, math, synthio, time
+import audiobusio
+import audiocore
+import audiomixer
+import board
+import math
+import synthio
+import time
 
 import ulab.numpy as np
 
@@ -22,14 +28,22 @@ print(f"supervisor.runtime.autoreload = {supervisor.runtime.autoreload}")
 
 
 # ---------------- setup
-# my Pico testbed
-PIN_BIT_CLOCK   = board.GP16
-PIN_WORD_SELECT = board.GP17
-PIN_DATA        = board.GP18
+# RP Pico testbed
+# PIN_BIT_CLOCK   = board.GP16
+# PIN_WORD_SELECT = board.GP17
+# PIN_DATA        = board.GP18
+
+# Feather RP2040
+PIN_BIT_CLOCK   = board.D9
+PIN_WORD_SELECT = board.D10
+PIN_DATA        = board.D11
+
+
+# We need a pretty big buffer to stop I/O noise! Why?
+# If we use 2 channels, 32K is insufficient on Feather! 48K is mostly ok, 64K almost entirely :-/
+MIXER_BUFFER_SIZE = 32*1024 
 
 SYNTH_SAMPLE_RATE = 22050
-MIXER_BUFFER_SIZE = 2*1024
-
 WAVE_SAMPLE_SIZE   =  1024
 WAVE_SAMPLE_VOLUME = 32767
 
@@ -39,14 +53,14 @@ sine_wave = np.array(
 
 # FIXME: ramp num could be really low, right? why not?
 RAMP_SAMPLE_SIZE = 100
-ramp_up_from_zero = np.linspace(
+linear_ramp = np.linspace(
     0, WAVE_SAMPLE_VOLUME, num=RAMP_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
 
 audio = audiobusio.I2SOut(PIN_BIT_CLOCK, PIN_WORD_SELECT, PIN_DATA)
 
 # As per https://github.com/todbot/circuitpython-synthio-tricks use a mixer:
-_mixer = audiomixer.Mixer(channel_count=2, sample_rate=SYNTH_SAMPLE_RATE, buffer_size=MIXER_BUFFER_SIZE)
-_synth = synthio.Synthesizer(channel_count=2, sample_rate=SYNTH_SAMPLE_RATE)
+_mixer = audiomixer.Mixer(channel_count=1, sample_rate=SYNTH_SAMPLE_RATE, buffer_size=MIXER_BUFFER_SIZE)
+_synth = synthio.Synthesizer(channel_count=1, sample_rate=SYNTH_SAMPLE_RATE)
 
 # the audio plays the mixer, and the mixer plays the synth. right? whatev.
 audio.play(_mixer)
@@ -57,7 +71,7 @@ _mixer.voice[0].play(_synth)
 # ---------------- end setup
 
 
-def test1(synth):
+def test_1(synth):
 
     # start_note = 65
     # song_notes = (start_note+0, start_note+5, start_note-3) # @todbot's melody
@@ -65,45 +79,44 @@ def test1(synth):
     # song_notes = (60, 63, 65, 60, 63, 66, 65) # smoke on the water
     song_notes = (60, 67, 72) # C G C
  
-
-    # Starting note
+    # We create just one Note, and bend it for all our "song notes".
+    #
     f1 = synthio.midi_to_hz(song_notes[0])
-
-    lfo = synthio.LFO(waveform=ramp_up_from_zero, once=True, scale=0) # scale=0: no bend to start with
+    lfo = synthio.LFO(waveform=linear_ramp, once=True, scale=0) # scale=0: no bend to start with
     n = synthio.Note(f1, waveform=sine_wave, bend=lfo)
     synth.press(n)
 
     while True:
-        time.sleep(.1)
+        time.sleep(2)
         for sn in song_notes:
             f2 = synthio.midi_to_hz(sn)
-            slideFromF1toF2(n, f1, f2, nSeconds=0.1)
+            slide_from_f1_to_f2(n, f1, f2, seconds=0.1)
             f1 = f2
-            time.sleep(.5)
+            time.sleep(1)
 
 
-def slideFromF1toF2(note: synthio.Note, startfreq, targetFreq, nSeconds=1.0):
+def slide_from_f1_to_f2(note: synthio.Note, start_freq, target_freq, seconds=1.0):
     """ Create the proper LFO to take us from current to target freq, and trigger it. 
     
-    nSeconds: number of seconds to take to move from start to target (inverse of LFO rate).
+    seconds: number of seconds to take to move from start to target (inverse of LFO rate).
     """
 
     # Get the bend LFO
     lfo = note.bend
 
-    # lfo 'scale' is just the base-2 log of the ratio of the frequencies.
-    lfo.scale = math.log(targetFreq/startfreq, 2)
+    # In order to bend to the target freq, 
+    # the lfo 'scale' is the base-2 log of the ratio of the frequencies.
+    lfo.scale = math.log(target_freq/start_freq, 2)
+    print(f"  slide: {start_freq:.0f} -> {target_freq:.0f} (lfo.scale = {lfo.scale:.2f})")
 
     # reset the note's freq to the starting freq
-    note.frequency = startfreq
+    note.frequency = start_freq
+    lfo.rate = 1/seconds
 
-    lfo.rate = 1/nSeconds
-
-    print(f"  goToNote: {startfreq:.0f} -> {targetFreq:.0f} => lfo.scale {lfo.scale:.2f}")
     lfo.retrigger()
 
 
-test1(_synth)
+test_1(_synth)
 
 print("test_theremin_2.py done!")
 while True:
