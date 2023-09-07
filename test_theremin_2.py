@@ -48,13 +48,37 @@ WAVE_SAMPLE_SIZE   =  1024
 WAVE_SAMPLE_VOLUME = 32767
 
 sine_wave = np.array(
-    np.sin(np.linspace(0, 2*np.pi, WAVE_SAMPLE_SIZE, endpoint=False)) * WAVE_SAMPLE_VOLUME, 
-    dtype=np.int16)
+    np.sin(np.linspace(0, 2*np.pi, WAVE_SAMPLE_SIZE, endpoint=False)) * WAVE_SAMPLE_VOLUME, dtype=np.int16)
 
-# FIXME: ramp num could be really low, right? why not?
+# FIXME: ramp num could be rather low, for a coarse LFO, right? why not?
 RAMP_SAMPLE_SIZE = 100
-linear_ramp = np.linspace(
-    0, WAVE_SAMPLE_VOLUME, num=RAMP_SAMPLE_SIZE, endpoint=False, dtype=np.int16)
+linear_ramp = np.linspace(0, WAVE_SAMPLE_VOLUME, num=RAMP_SAMPLE_SIZE, dtype=np.int16)
+
+# the 'sigmoid' function
+# as per https://stackoverflow.com/a/43024799/981435
+#
+# all values are in range (-1, 1)
+def sigmoid(x_array, full_scale):
+    # the basic function, 1 / (1 + np.exp(-x_array)), is range (0,1)
+    # 
+    return full_scale * (2.0 / (1.0 + np.exp(-x_array)) - 1.0)
+
+print("Generating sigmoids....")
+# The range of these is (-1, 1)
+sigmoid_ramp_10_f = sigmoid(np.linspace(-10, 10, num=RAMP_SAMPLE_SIZE, dtype=np.float), WAVE_SAMPLE_VOLUME)
+sigmoid_ramp_5_f  = sigmoid(np.linspace( -5,  5, num=RAMP_SAMPLE_SIZE, dtype=np.float), WAVE_SAMPLE_VOLUME)
+print("Done!")
+
+# Now change to 16-it signed int
+sigmoid_ramp_10 = np.array(sigmoid_ramp_10_f, dtype=np.int16)
+sigmoid_ramp_5  = np.array(sigmoid_ramp_5_f,  dtype=np.int16)
+
+## for plotting, debugging
+# for x in sigmoid_ramp_10:
+#     print(x)
+# for x in sigmoid_ramp_5:
+#     print(x)
+
 
 audio = audiobusio.I2SOut(PIN_BIT_CLOCK, PIN_WORD_SELECT, PIN_DATA)
 
@@ -73,16 +97,21 @@ _mixer.voice[0].play(_synth)
 
 def test_1(synth):
 
+    ## Pick one:
+    # lfo_waveform = linear_ramp
+    # lfo_waveform = sigmoid_ramp_10
+    lfo_waveform = sigmoid_ramp_5
+
+    # Song data:
     # start_note = 65
     # song_notes = (start_note+0, start_note+5, start_note-3) # @todbot's melody
-
-    # song_notes = (60, 63, 65, 60, 63, 66, 65) # smoke on the water
+    # song_notes = (60, 63, 65, 60, 63, 66, 65) # smoke on the water?
     song_notes = (60, 67, 72) # C G C
  
     # We create just one Note, and bend it for all our "song notes".
     #
     f1 = synthio.midi_to_hz(song_notes[0])
-    lfo = synthio.LFO(waveform=linear_ramp, once=True, scale=0) # scale=0: no bend to start with
+    lfo = synthio.LFO(waveform=lfo_waveform, once=True, scale=0) # scale=0: no bend to start with
     n = synthio.Note(f1, waveform=sine_wave, bend=lfo)
     synth.press(n)
 
