@@ -101,8 +101,40 @@ _mixer.voice[0].play(_synth)
 # ---------------- end setup
 
 
-def test_1(synth):
+def test_2(synth):
+    """ Play a tune using different LFO "ramps"."""
 
+    lfo_ramps = [("Linear", linear_ramp), ("Sig10", sigmoid_ramp_10), ("Sig5", sigmoid_ramp_5)]
+
+    # Song data:
+    # "NBC Mystery Movie" theme
+    #             C3  C4  A3  D3  D4  Bb3 G3  G4  E4  C4
+    song_notes = (48, 60, 57, 50, 62, 58, 55, 67, 64, 60)
+
+    # Must create a new note for the various LFOs :-(
+    #
+    while True:
+        for rampData in lfo_ramps:
+
+            name = rampData[0]
+            ramp = rampData[1]
+            print(f"Using ramp '{name}'...")
+
+            f1 = synthio.midi_to_hz(song_notes[0])
+            lfo = synthio.LFO(waveform=ramp, once=True, scale=0) # scale=0: no bend to start with
+            n = synthio.Note(f1, waveform=sine_wave, bend=lfo)
+            synth.press(n)
+            time.sleep(2)
+            for sn in song_notes:
+                f2 = synthio.midi_to_hz(sn)
+                slide_from_f1_to_f2(n, f1, f2, seconds=0.1)
+                f1 = f2
+                time.sleep(1)
+            synth.release_all()
+
+
+def test_1(synth):
+    """First demo of this approach to a theremin-y sound"""
     ## Pick one:
     # lfo_waveform = linear_ramp
     # lfo_waveform = sigmoid_ramp_10
@@ -134,6 +166,7 @@ def test_1(synth):
             time.sleep(1)
 
 
+
 def slide_from_f1_to_f2(note: synthio.Note, start_freq, target_freq, seconds=1.0):
     """ Create the proper LFO to take us from current to target freq, and trigger it. 
     
@@ -155,7 +188,7 @@ def slide_from_f1_to_f2(note: synthio.Note, start_freq, target_freq, seconds=1.0
     lfo.retrigger()
 
 
-test_1(_synth)
+test_2(_synth)
 
 print("test_theremin_2.py done!")
 while True:
