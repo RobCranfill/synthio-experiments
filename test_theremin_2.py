@@ -15,6 +15,7 @@ import audiocore
 import audiomixer
 import board
 import math
+import os
 import synthio
 import time
 
@@ -28,16 +29,21 @@ print(f"supervisor.runtime.autoreload = {supervisor.runtime.autoreload}")
 
 
 # ---------------- setup
-# RP Pico testbed
-# PIN_BIT_CLOCK   = board.GP16
-# PIN_WORD_SELECT = board.GP17
-# PIN_DATA        = board.GP18
-
-# Feather RP2040
-PIN_BIT_CLOCK   = board.D9
-PIN_WORD_SELECT = board.D10
-PIN_DATA        = board.D11
-
+# My two testbeds
+board_type = os.uname().machine
+if "Pico" in board_type:
+    print("Detected Pico!")
+    PIN_BIT_CLOCK   = board.GP16
+    PIN_WORD_SELECT = board.GP17
+    PIN_DATA        = board.GP18
+elif "Feather" in board_type:
+    print("Detected Feather!")
+    PIN_BIT_CLOCK   = board.D9
+    PIN_WORD_SELECT = board.D10
+    PIN_DATA        = board.D11
+else:
+    print("Unsupported board?")
+    raise Exception
 
 # We need a pretty big buffer to stop I/O noise! Why?
 # If we use 2 channels, 32K is insufficient on Feather! 48K is mostly ok, 64K almost entirely :-/
@@ -108,6 +114,10 @@ def test_1(synth):
     # song_notes = (60, 63, 65, 60, 63, 66, 65) # smoke on the water?
     song_notes = (60, 67, 72) # C G C
  
+    # "NBC Mystery Movie" theme
+    #             C3  C4  A3  D3  D4  Bb3 G3  G4  E4  C4
+    song_notes = (48, 60, 57, 50, 62, 58, 55, 67, 64, 60)
+
     # We create just one Note, and bend it for all our "song notes".
     #
     f1 = synthio.midi_to_hz(song_notes[0])
