@@ -2,8 +2,8 @@
 
 print("Hello, pico-cran!")
 
-import test_theremin_1
-# import test_pcm5102
+# import test_theremin_2
+import test_pcm5102
 # import test_wav
 
 print("Bye, pico-cran!")
